@@ -1,0 +1,18 @@
+Problem type: clustering
+Number of selected features: 15
+Selected features:
+- Teenhome
+- AcceptedCmp5
+- MntWines
+- Response
+- Education_Graduation
+- MntFishProducts
+- MntFruits
+- NumWebPurchases
+- NumDealsPurchases
+- Education_PhD
+- NumStorePurchases
+- AcceptedCmp1
+- MntSweetProducts
+- AcceptedCmp4
+- NumWebVisitsMonth

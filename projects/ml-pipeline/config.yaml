@@ -1,0 +1,63 @@
+# ML Pipeline Configuration
+
+# Data settings
+data:
+  path: "data/customer_personality_analysis.csv"
+  target_column: "Response"  # Set to null for clustering tasks
+  test_size: 0.2
+  random_state: 42
+  memory_efficient: true  # Use memory-efficient processing for large datasets
+
+# Task settings
+task:
+  type: "clustering"  # Options: "classification", "clustering"
+  
+# Preprocessing settings
+preprocessing:
+  missing_threshold: 0.9
+  max_unique_values_cat: 50
+  correlation_threshold: 0.9
+  handle_outliers: true
+  scale_data: true
+  encoding_method: "auto"  # Options: "auto", "onehot", "label", "target"
+
+# Feature selection settings
+feature_selection:
+  enabled: true
+  n_features: null  # null means auto-select optimal number
+  downsample: true  # Use downsampling for large datasets
+  importance_threshold: 0.01  # Features with importance below this are dropped
+
+# Classification settings (used when task.type is "classification")
+classification:
+  algorithms: ["logistic_regression", "random_forest", "xgboost", "svm", "knn"]
+  metrics: ["accuracy", "precision", "recall", "f1", "roc_auc"]
+  cv_folds: 5
+  use_smote: true
+  tune_hyperparams: true
+  balance_class_weights: true
+
+# Clustering settings (used when task.type is "clustering")
+clustering:
+  algorithms: ["kmeans", "hierarchical", "dbscan"]
+  n_clusters_range: [2, 8]
+  n_init: 10
+  max_iter: 300
+  metrics: ["silhouette", "calinski_harabasz", "davies_bouldin"]
+
+# Reporting settings
+reporting:
+  save_models: true
+  generate_visualizations: true
+  generate_summary: true
+  save_preprocessed_data: true
+  output_dir: null  # null means a timestamped directory will be created
+  log_level: "INFO"  # Options: "DEBUG", "INFO", "WARNING", "ERROR"
+
+# Advanced settings
+advanced:
+  n_jobs: -1  # Number of parallel jobs (-1 means use all processors)
+  batch_size: 1000  # Batch size for processing large datasets
+  memory_limit: "auto"  # Memory limit for model training (in MB, "auto" for automatic detection)
+  timeout: 3600  # Timeout for model training (in seconds)
+  seed: 42  # Random seed for reproducibility 

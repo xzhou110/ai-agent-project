@@ -1,0 +1,15 @@
+Clustering Pipeline Summary
+=========================
+
+Date: 2025-04-10 00:43:06
+
+Original data shape: (2240, 30)
+Preprocessed data shape: (2240, 39)
+Number of selected features: 15
+Selected features: Teenhome, AcceptedCmp5, MntWines, Response, Education_Graduation, MntFishProducts, MntFruits, NumWebPurchases, NumDealsPurchases, Education_PhD, NumStorePurchases, AcceptedCmp1, MntSweetProducts, AcceptedCmp4, NumWebVisitsMonth
+
+Best clustering method: KMeans
+Optimal number of clusters: 2
+Cluster distribution:
+  Cluster 0: 1427 samples (63.7%)
+  Cluster 1: 813 samples (36.3%)
