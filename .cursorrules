@@ -74,6 +74,13 @@ Explicitly document knowledge gaps or open questions:
 
 
 
+🔍 Testing & Validation
+
+All tasks must successfully pass appropriate tests before marking the task as completed. Ensure validation clearly confirms task success.
+
+
+
+
 🔄 Continuous Improvement Goals
 
 Regularly:
