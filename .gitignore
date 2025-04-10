@@ -1,0 +1,8 @@
+__pycache__/      # Temporary Python cache files
+*.pyc             # Compiled Python files
+
+.env              # Secret API keys, passwords
+data/             # Potentially large data files
+
+.DS_Store         # Mac OS system file (if collaborating)
+.cursor/          # Cursor editor specific settings
