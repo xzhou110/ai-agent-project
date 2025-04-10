@@ -1,8 +1,31 @@
 __pycache__/      # Temporary Python cache files
 *.pyc             # Compiled Python files
+*.pyo             # Optimized Python files
+*.pyd             # Python DLL files
+.Python           # Python virtual environment marker
+*$py.class        # Python class files
 
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
 .env              # Secret API keys, passwords
+.venv
+env/
+venv/
+ENV/
+
+# Project specific
 data/             # Potentially large data files
 
+# OS specific
 .DS_Store         # Mac OS system file (if collaborating)
+Thumbs.db         # Windows thumbnail cache
+desktop.ini       # Windows folder config
+
+# Editor specific
 .cursor/          # Cursor editor specific settings
+.vscode/          # VS Code settings
+.idea/            # PyCharm settings
