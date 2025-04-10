@@ -28,13 +28,23 @@ When starting a new task:
 
 Note all tools/scripts used clearly, including purpose, commands, and concise examples:
 
-Example Tool Structure:
+Search Engine Tool:
+• Location: utils/search_engine.py
+• Purpose: Search the internet via DuckDuckGo with retry logic and fallback
+• Functions:
+  - search_internet(query, max_results=10, max_retries=3)
+  - search_with_fallback(query, max_results=10, max_retries=3)
+• Example:
+  ```python
+  from utils.search_engine import search_internet
+  results = search_internet("fashion news", max_results=5)
+  for r in results:
+      print(f"{r['title']} - {r['url']}")
+  ```
+• Usage: `py utils/demo_search.py "query" --max-results=5`
+• Dependencies: requests, beautifulsoup4
 
-Tool Name:
-• Purpose
-• Commands
-• Example snippets
-• Version/date notes
+NOTE: For complete documentation of each tool, refer to the README.md file in the respective utility folder. This section is for quick reference only.
 
 
 
@@ -49,11 +59,43 @@ Solution: Verify documentation thoroughly before implementation.
 
 💡 AI-Specific Learnings:
 
-(Populate continuously)
+Python Environment Issues:
+- When running Python scripts on Windows, use `py` instead of `python`
+- On PowerShell, use semicolons (`;`) for command separation instead of ampersands (`&&`)
+- If "Python was not found" error occurs, verify Python is installed and in PATH or use full path to Python executable
+- Run `where py` or `where python` to find Python executable locations
+- Command example: `cd utils; py demo_search.py "query"` (in PowerShell)
+- When navigating directories, be aware of your current location - use `cd ..` to go up a directory
+
+Search Engine Issues:
+- Query matching requires word-level analysis, not just substring matching
+- Use proper HTTP headers including User-Agent to avoid request blocks
+- Extract URLs from redirect links properly when needed
+- Include robust retry logic for network failures
+- Implement fallbacks for zero-result queries (try simplifying or reformulating)
+- Never return unrelated results when no match is found - return empty results instead
+- Provide helpful user feedback when no results are found
+- Use proper fallback mechanisms that maintain relevance to the original query
+- Return None/null from internal functions rather than arbitrary defaults
+- Add proper type hints (Optional[T]) when functions might return None
+- Parse HTML responses carefully with BeautifulSoup for reliable extraction
+
+Testing and Packaging:
+- Mock responses for API tests to avoid external dependencies
+- Use unittest.mock to simulate network errors for testing retry logic
+- Include __init__.py in utility folders to make them proper Python packages
 
 👤 User-Specific Learnings:
 
-(Populate continuously)
+- Windows 10 environment with PowerShell as the terminal
+- Prefers utility scripts to be in their respective module folders (e.g., demo_search.py in utils/)
+- Documentation preferred in both README.md (for detailed module docs) and .cursorrules (for quick reference)
+
+Utility Organization:
+- Keep all utility tools directly in the utils/ folder rather than in subfolders
+- Use proper naming conventions to avoid conflicts (e.g., file_utils.py, string_utils.py)
+- Place demo scripts and tests directly alongside their corresponding utilities
+- Maintain a single README.md in the utils/ folder documenting all utilities
 
 
 
@@ -69,7 +111,8 @@ Use actively for immediate thoughts, quick experiments, hypotheses, and explorat
 
 Explicitly document knowledge gaps or open questions:
 
-(Populate continuously)
+- What additional utilities will be needed in the future?
+- Should utilities share common configuration or be completely independent?
 
 
 
@@ -77,6 +120,12 @@ Explicitly document knowledge gaps or open questions:
 🔍 Testing & Validation
 
 All tasks must successfully pass appropriate tests before marking the task as completed. Ensure validation clearly confirms task success.
+
+Testing Strategies:
+- Create separate test file for each utility module
+- Use unittest.mock to mock external dependencies
+- Test both success paths and failure paths (including retries)
+- Verify CLI tools with both valid and invalid command-line arguments
 
 
 
@@ -90,6 +139,23 @@ Regularly:
 [ ] Set periodic reviews (weekly/monthly)
 
 
+📚 Documentation Guidelines
+
+- Focus on concise, actionable information over comprehensive documentation
+- Document the "why" behind decisions, not just the "what" and "how"
+- Use bullet points and short examples rather than long paragraphs
+- Prioritize documenting edge cases, gotchas, and non-obvious behaviors
+- Archive older or less relevant documentation when updating
+- For .cursorrules:
+  * Keep entries focused on insights that prevent future errors
+  * Limit examples to 3-5 lines of code when possible
+  * Use headers and sections to organize information
+  * Regularly review and prune outdated information
+- For README.md:
+  * Focus on clear usage examples
+  * Include minimum required parameters
+  * Document return values and exceptions
+  * Keep API documentation up-to-date with code changes
 
 
 Regularly revisit this document to summarize insights, prune unnecessary content, and preserve critical instructions clearly.
