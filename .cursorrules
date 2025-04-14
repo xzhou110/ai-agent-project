@@ -1,32 +1,37 @@
 🧠 AI Self-Evolving Guidelines
 
-IMPORTANT: Instructions in all sections should only be intentionally updated and preserved carefully.
+- Keep all instructions here unless intentionally updating.
+- Document only what truly helps future efficiency and prevents repeated mistakes
 
 
 
 
 📋 Instructions
 
-During interactions, document reusable insights (e.g., versions of libraries, models, fixes to mistakes, corrections received) in the LESSONS LEARNED section. Use this file actively as a workspace (Scratchpad) to plan, track, and reflect clearly on tasks.
+- During tasks, note key insights or corrections under LESSONS LEARNED.
+- Treat this file as a living reference for recurring patterns, repeated errors, and quick guidelines.
 
 
 
 
-📌 Task Planning and Progress
+📌 Task Planning and Validation
 
-When starting a new task:
-[X] Clearly explain goal and core requirements
-[ ] Subdivide tasks into manageable subtasks
-[ ] Track subtasks clearly (mark completed with [X])
-[ ] Regularly update and reflect after milestones
-[ ] Document barriers encountered and successful strategies
+When starting a new task
+- Explain the goal and core requirements
+- Subdivide into manageable subtasks and track progress (mark completed with [X])
+- Note barriers encountered and successful strategies
+
+After each milestone
+- Reflect on lessons for future reuse
+- Validate work with tests, checking success/failure paths
+- Confirm results before marking tasks complete
 
 
 
 
 🛠️ Tools
 
-Note all tools/scripts used clearly, including purpose, commands, and concise examples:
+Note all tools/scripts used clearly, including purpose, location, commands, and concise examples:
 
 Search Engine Tool:
 • Location: utils/search_engine.py
@@ -119,35 +124,12 @@ Use actively for immediate thoughts, quick experiments, hypotheses, and explorat
 
 
 
-❓ Knowledge Gaps & Questions
+🔄 Continuous Improvement
 
-Explicitly document knowledge gaps or open questions that need further investigation:
-
-- What additional utilities will be needed in the future?
-- Should utilities share common configuration or be completely independent?
-
-
-
-
-🔍 Testing & Validation
-
-All tasks must successfully pass appropriate tests before marking the task as completed. Ensure validation clearly confirms task success.
-
-Testing Strategies:
-- Create separate test file for each utility module
-- Test both success paths and failure paths (including retries)
-- Verify CLI tools with both valid and invalid command-line arguments
-
-
-
-
-🔄 Continuous Improvement Goals
-
-Regularly:
-[X] Assess documentation and process effectiveness
-[ ] Identify repetitive tasks/inefficiencies for automation
-[ ] Proactively challenge assumptions
-[ ] Set periodic reviews (weekly/monthly)
+- Regularly update outdated references or instructions.
+- Identify repeated manual steps for automation.
+- Challenge assumptions that may slow progress.
+- Mark items for weekly or monthly review.
 
 
 
@@ -173,5 +155,4 @@ Regularly:
 
 
 
-
-Regularly revisit this document to summarize insights, prune unnecessary content, and preserve critical instructions clearly.
+Use this document to maintain a lean, evolving knowledge base. Revisit often to update insights, retire outdated information, and ensure everything stays accurate and helpful.
