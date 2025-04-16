@@ -21,7 +21,7 @@
 - Before starting a new task, break it down into smaller subtasks
 - Mark progress or completion of each subtask (use something like [X] for completed)
 - If new insights or shortcuts emerge, update relevant sections here
-- After each milestone, validate work, reflect on lessons learned, and log them if they’re likely to recur
+- After each milestone, validate work, reflect on lessons learned, and log them if they're likely to recur
 
 
 
@@ -83,6 +83,14 @@ NOTE: For complete documentation of each tool, refer to the README.md file in th
 - On PowerShell, use semicolons (`;`) for command separation instead of ampersands (`&&`)
 - When navigating directories, be aware of your current location - use `cd ..` to go up a directory
 
+💡 PowerShell Specifics:
+- In PowerShell, use semicolons (`;`) for command chaining: `cd dir; py script.py`
+- `&&` is not a valid statement separator in PowerShell - it will produce an error
+- For directory operations in PowerShell, use `Move-Item` instead of `mv` for more reliable results
+- When moving directories, always specify full paths to avoid ambiguity
+- PowerShell commands are case-insensitive, unlike bash
+- Use `Join-Path` for path handling to ensure proper formatting
+
 💡 Web Search Implementation:
 - Use proper HTTP headers including User-Agent to avoid request blocks
 - Include robust retry logic for network failures
@@ -104,13 +112,27 @@ NOTE: For complete documentation of each tool, refer to the README.md file in th
 - Include proper dependencies in requirements.txt (with version numbers)
 - Mock external APIs/services for tests to avoid network dependencies
 - Use try/except blocks to handle network failures gracefully
-
+- When renaming project directories, remember to update all import paths
 
 💡 Documentation Best Practices:
 - Maintain README.md in each module folder for detailed documentation
 - Use .cursorrules for recurring patterns, lessons, and quick reference
 - Document the "why" behind implementation decisions
 - Keep documentation close to the code it describes
+- Include platform-specific instructions in documentation (e.g., PowerShell vs. Bash)
+
+💡 Reinforcement Learning Best Practices:
+- Use experience replay to break correlations between consecutive samples
+- Implement target networks that update less frequently to stabilize training
+- Apply epsilon-greedy exploration with appropriate decay rates
+- Monitor key training metrics (rewards, episode lengths, loss values)
+- Implement early stopping based on clear success criteria
+- Add gradient clipping to prevent exploding gradients
+- Keep hyperparameters like learning rate, batch size, and network architecture configurable
+- Save models regularly during training to prevent loss of progress
+- Evaluate models periodically using separate evaluation episodes
+- Visualize training progress and agent behavior for better understanding
+- Implement proper environment wrappers to standardize interaction
 
 
 
@@ -118,7 +140,9 @@ NOTE: For complete documentation of each tool, refer to the README.md file in th
 👤 USER-SPECIFIC NOTES
 
 - Observe recurring user preferences, environment details, and workflows
-- Adapt your approaches to align with the user’s style and system constraints
+- Adapt your approaches to align with the user's style and system constraints
+- User is on Windows 10 and uses PowerShell as primary terminal
+- The user prefers clear project organization with descriptive folder names
 
 
 
