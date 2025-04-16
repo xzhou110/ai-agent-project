@@ -1,455 +1,430 @@
-import argparse
+#!/usr/bin/env python3
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-import json
+import argparse
 import logging
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+from pathlib import Path
 from tqdm import tqdm
+import json
 import time
-from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime
 
 from environment import LunarLanderEnvironment
 from agent import DQNAgent, DoubleDQNAgent
-from utils import moving_average, save_training_data
 
 # Configure logging
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
-        logging.FileHandler("logs/evaluation.log"),
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("Evaluation")
 
-def evaluate_agent(env: LunarLanderEnvironment, 
-                  agent, 
-                  num_episodes: int = 10, 
-                  render: bool = False,
-                  record: bool = False,
-                  record_dir: str = "results/evaluation",
-                  record_freq: int = 2) -> Dict[str, Any]:
+def set_seed(seed: int) -> None:
     """
-    Evaluate an agent's performance over several episodes.
+    Set random seeds for reproducibility.
     
     Args:
-        env: The environment to evaluate on
-        agent: The agent to evaluate
-        num_episodes: Number of evaluation episodes
-        render: Whether to render the environment
-        record: Whether to record episodes as GIFs/MP4s
-        record_dir: Directory to save recordings
-        record_freq: Frequency of episodes to record
+        seed: Random seed
+    """
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    logger.info(f"Set random seed to {seed}")
+
+def load_agent(model_path: str, agent_type: str, env: LunarLanderEnvironment, device: torch.device) -> object:
+    """
+    Load a trained agent from a checkpoint.
+    
+    Args:
+        model_path: Path to the model checkpoint
+        agent_type: Type of agent ('dqn' or 'double_dqn')
+        env: Environment instance
+        device: Device to load the model on
         
     Returns:
-        Dictionary containing evaluation statistics
+        Loaded agent
     """
-    logger.info(f"Evaluating agent over {num_episodes} episodes")
+    state_dim = env.state_dim
+    action_dim = env.action_dim
     
-    # Create recording directory if needed
-    if record:
-        os.makedirs(record_dir, exist_ok=True)
+    # Create agent based on type
+    if agent_type.lower() == 'dqn':
+        agent = DQNAgent(
+            state_dim=state_dim,
+            action_dim=action_dim,
+            device=device
+        )
+    elif agent_type.lower() == 'double_dqn':
+        agent = DoubleDQNAgent(
+            state_dim=state_dim,
+            action_dim=action_dim,
+            device=device
+        )
+    else:
+        raise ValueError(f"Unknown agent type: {agent_type}")
     
-    # Track metrics
+    # Load model
+    agent.load(model_path)
+    logger.info(f"Loaded {agent_type} agent from {model_path}")
+    
+    return agent
+
+def evaluate_agent(
+    agent: object,
+    env: LunarLanderEnvironment,
+    num_episodes: int = 100,
+    max_steps: int = 1000,
+    render: bool = False,
+    record_video: bool = False,
+    video_path: str = "results/videos",
+    verbose: bool = True
+) -> dict:
+    """
+    Evaluate an agent's performance.
+    
+    Args:
+        agent: The agent to evaluate
+        env: The environment to evaluate in
+        num_episodes: Number of evaluation episodes
+        max_steps: Maximum steps per episode
+        render: Whether to render evaluation episodes
+        record_video: Whether to record video
+        video_path: Path to save videos
+        verbose: Whether to print detailed information
+        
+    Returns:
+        Dictionary with evaluation metrics
+    """
+    # Set agent to evaluation mode
+    agent.eval()
+    
+    # Metrics to track
     rewards = []
     episode_lengths = []
-    successful_landings = 0
-    crashes = 0
+    success_count = 0
+    
+    # If recording, setup video dir
+    if record_video:
+        os.makedirs(video_path, exist_ok=True)
+    
+    # Set environment to render or record if needed
+    if render and not env.render_mode:
+        env.render_mode = "human"
     
     # Run evaluation episodes
-    for episode in tqdm(range(1, num_episodes + 1)):
-        state = env.reset()
+    if verbose:
+        logger.info(f"Evaluating agent over {num_episodes} episodes...")
+        episode_range = tqdm(range(num_episodes))
+    else:
+        episode_range = range(num_episodes)
+    
+    for episode in episode_range:
+        state, _ = env.reset()
         episode_reward = 0
-        steps = 0
-        done = False
         
-        # Whether to record this episode
-        should_record = record and (episode % record_freq == 0)
-        frames = [] if should_record else None
+        # Record video for selected episodes
+        if record_video and episode < 5:  # Record first 5 episodes
+            video_file = os.path.join(video_path, f"episode_{episode}.mp4")
+            env.start_recording(video_file)
         
-        while not done:
-            # Select action using the agent's policy
-            action = agent.predict(state)
+        for step in range(max_steps):
+            # Select action without exploration
+            action = agent.select_action(state, explore=False)
             
-            # Take a step in the environment
-            next_state, reward, terminated, truncated, info = env.step(action)
+            # Take action
+            next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             
-            # Collect frames if recording
-            if should_record and env.render_mode == 'rgb_array':
-                frames.append(env.render())
-            elif render:
-                env.render()
-                time.sleep(0.01)  # Small delay to make rendering visible
-            
-            # Update state and counters
+            # Update state and reward
             state = next_state
             episode_reward += reward
-            steps += 1
             
-            # Check if landing was successful
-            if terminated:
-                # In LunarLander, reward threshold for solving is 200
-                # A reasonably good landing often gives rewards > 100
-                if episode_reward > 100:
-                    successful_landings += 1
-                else:
-                    crashes += 1
+            # Render if needed
+            if render:
+                env.render()
+            
+            # Break if done
+            if done:
+                # Check if it was a successful landing
+                if terminated and reward >= 100:  # Assuming reward threshold for success
+                    success_count += 1
+                break
         
-        # Record episode statistics
+        # Stop recording if we were recording
+        if record_video and episode < 5:
+            env.stop_recording()
+        
+        # Store episode metrics
         rewards.append(episode_reward)
-        episode_lengths.append(steps)
-        
-        # Save recording
-        if should_record and frames:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            gif_path = os.path.join(record_dir, f"episode_{episode}_{timestamp}.gif")
-            env.save_frames_as_gif(frames, gif_path)
-            logger.info(f"Saved recording to {gif_path}")
-            
-            # Optionally save as MP4 as well
-            mp4_path = os.path.join(record_dir, f"episode_{episode}_{timestamp}.mp4")
-            env.save_frames_as_mp4(frames, mp4_path)
+        episode_lengths.append(step + 1)
     
-    # Compute statistics
-    avg_reward = np.mean(rewards)
+    # Calculate statistics
+    mean_reward = np.mean(rewards)
     std_reward = np.std(rewards)
-    avg_length = np.mean(episode_lengths)
+    min_reward = np.min(rewards)
+    max_reward = np.max(rewards)
+    median_reward = np.median(rewards)
+    success_rate = success_count / num_episodes
+    mean_episode_length = np.mean(episode_lengths)
     
-    success_rate = (successful_landings / num_episodes) * 100
-    crash_rate = (crashes / num_episodes) * 100
-    
-    # Log results
-    logger.info(f"Evaluation results over {num_episodes} episodes:")
-    logger.info(f"  Average reward: {avg_reward:.2f} ± {std_reward:.2f}")
-    logger.info(f"  Average episode length: {avg_length:.2f}")
-    logger.info(f"  Success rate: {success_rate:.2f}%")
-    logger.info(f"  Crash rate: {crash_rate:.2f}%")
-    
-    # Create evaluation statistics dictionary
-    eval_stats = {
-        "rewards": rewards,
-        "episode_lengths": episode_lengths,
-        "avg_reward": avg_reward,
-        "std_reward": std_reward,
-        "min_reward": np.min(rewards),
-        "max_reward": np.max(rewards),
-        "avg_length": avg_length,
-        "success_rate": success_rate,
-        "crash_rate": crash_rate,
-        "num_episodes": num_episodes
+    # Create results dictionary
+    results = {
+        "mean_reward": float(mean_reward),
+        "std_reward": float(std_reward),
+        "min_reward": float(min_reward),
+        "max_reward": float(max_reward),
+        "median_reward": float(median_reward),
+        "success_rate": float(success_rate),
+        "mean_episode_length": float(mean_episode_length),
+        "episodes": num_episodes
     }
     
-    # Plot reward distribution
+    # Print results
+    if verbose:
+        logger.info(f"Evaluation Results:")
+        logger.info(f"Mean Reward: {mean_reward:.2f} ± {std_reward:.2f}")
+        logger.info(f"Min/Max Reward: {min_reward:.2f}/{max_reward:.2f}")
+        logger.info(f"Median Reward: {median_reward:.2f}")
+        logger.info(f"Success Rate: {success_rate:.2%}")
+        logger.info(f"Mean Episode Length: {mean_episode_length:.2f}")
+    
+    return results
+
+def plot_reward_distribution(rewards: list, save_path: str = None) -> None:
+    """
+    Plot the distribution of rewards.
+    
+    Args:
+        rewards: List of episode rewards
+        save_path: Path to save the plot
+    """
     plt.figure(figsize=(10, 6))
-    plt.hist(rewards, bins=15, alpha=0.7)
-    plt.axvline(avg_reward, color='r', linestyle='dashed', linewidth=2, label=f'Mean: {avg_reward:.2f}')
-    plt.xlabel("Episode Reward")
-    plt.ylabel("Frequency")
-    plt.title("Reward Distribution During Evaluation")
+    plt.hist(rewards, bins=20, alpha=0.7)
+    plt.axvline(np.mean(rewards), color='r', linestyle='--', label=f'Mean: {np.mean(rewards):.2f}')
+    plt.axvline(np.median(rewards), color='g', linestyle='--', label=f'Median: {np.median(rewards):.2f}')
+    plt.xlabel('Episode Reward')
+    plt.ylabel('Frequency')
+    plt.title('Reward Distribution')
     plt.legend()
     plt.grid(True, alpha=0.3)
     
-    if record:
-        plt.savefig(os.path.join(record_dir, "reward_distribution.png"))
-        plt.close()
+    if save_path:
+        plt.savefig(save_path)
+        logger.info(f"Saved reward distribution plot to {save_path}")
     
-    return eval_stats
+    plt.close()
 
-def analyze_states(env: LunarLanderEnvironment,
-                  agent,
-                  num_episodes: int = 5,
-                  save_dir: str = "results/state_analysis"):
+def compare_agents(
+    agents: list,
+    agent_names: list,
+    env: LunarLanderEnvironment,
+    num_episodes: int = 50,
+    max_steps: int = 1000,
+    save_dir: str = "results/comparisons"
+) -> dict:
     """
-    Analyze the state values and agent's actions during evaluation.
+    Compare multiple agents on the same environment.
     
     Args:
-        env: The environment to evaluate on
-        agent: The agent to evaluate
-        num_episodes: Number of episodes to analyze
-        save_dir: Directory to save analysis results
-    """
-    os.makedirs(save_dir, exist_ok=True)
-    logger.info(f"Analyzing agent behavior across {num_episodes} episodes")
-    
-    # Track state values
-    states = []
-    actions = []
-    rewards = []
-    
-    # Run episodes
-    for episode in range(1, num_episodes + 1):
-        state = env.reset()
-        episode_states = []
-        episode_actions = []
-        episode_rewards = []
-        done = False
-        
-        while not done:
-            # Select action
-            action = agent.predict(state)
-            
-            # Record state and action
-            episode_states.append(state)
-            episode_actions.append(action)
-            
-            # Take step
-            next_state, reward, terminated, truncated, _ = env.step(action)
-            done = terminated or truncated
-            state = next_state
-            
-            episode_rewards.append(reward)
-        
-        # Store episode data
-        states.append(np.array(episode_states))
-        actions.append(np.array(episode_actions))
-        rewards.append(np.array(episode_rewards))
-        
-        logger.info(f"Episode {episode}: {len(episode_states)} steps, " +
-                    f"final reward: {sum(episode_rewards):.2f}")
-    
-    # Create state distribution plots
-    plt.figure(figsize=(15, 10))
-    
-    # State components to analyze
-    state_components = ["x_position", "y_position", "x_velocity", "y_velocity",
-                        "angle", "angular_velocity", "left_leg_contact", "right_leg_contact"]
-    
-    for i, component in enumerate(state_components):
-        plt.subplot(2, 4, i+1)
-        
-        # Collect data across all episodes
-        component_data = []
-        for episode_states in states:
-            component_data.extend(episode_states[:, i])
-        
-        plt.hist(component_data, bins=20, alpha=0.7)
-        plt.title(component)
-        plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "state_distribution.png"))
-    
-    # Analyze action distribution
-    plt.figure(figsize=(10, 6))
-    all_actions = np.concatenate(actions)
-    action_counts = np.bincount(all_actions, minlength=env.num_actions)
-    action_names = ["Do nothing", "Fire left engine", "Fire main engine", "Fire right engine"]
-    
-    plt.bar(range(env.num_actions), action_counts)
-    plt.xticks(range(env.num_actions), action_names, rotation=45)
-    plt.title("Action Distribution")
-    plt.xlabel("Action")
-    plt.ylabel("Count")
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "action_distribution.png"))
-    
-    logger.info("State and action analysis completed")
-    
-    return {
-        "states": states,
-        "actions": actions,
-        "rewards": rewards
-    }
-
-def load_agent(model_path: str) -> Any:
-    """
-    Load a trained agent from a file.
-    
-    Args:
-        model_path: Path to the saved model file
-    
-    Returns:
-        The loaded agent
-    """
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found: {model_path}")
-    
-    # Determine model type from filename
-    model_type = "DQN"  # Default
-    if "double" in model_path.lower():
-        model_type = "DoubleDQN"
-    
-    logger.info(f"Loading {model_type} agent from {model_path}")
-    
-    # Create dummy environment to get state and action dimensions
-    dummy_env = LunarLanderEnvironment()
-    state_dim = dummy_env.num_observations
-    action_dim = dummy_env.num_actions
-    dummy_env.close()
-    
-    # Create agent
-    if model_type == "DoubleDQN":
-        agent = DoubleDQNAgent(state_dim=state_dim, action_dim=action_dim)
-    else:
-        agent = DQNAgent(state_dim=state_dim, action_dim=action_dim)
-    
-    # Load weights
-    agent.load(model_path)
-    return agent
-
-def compare_agents(model_paths: List[str], 
-                  num_episodes: int = 10,
-                  render: bool = False,
-                  save_dir: str = "results/comparison"):
-    """
-    Compare multiple trained agents on the same environment.
-    
-    Args:
-        model_paths: List of paths to saved model files
-        num_episodes: Number of episodes for evaluation
-        render: Whether to render the environment
+        agents: List of agents to compare
+        agent_names: Names of the agents
+        env: Environment to evaluate in
+        num_episodes: Number of evaluation episodes per agent
+        max_steps: Maximum steps per episode
         save_dir: Directory to save comparison results
-    
+        
     Returns:
-        Dictionary of evaluation statistics for each agent
+        Dictionary with comparison results
     """
+    if len(agents) != len(agent_names):
+        raise ValueError("Number of agents must match number of agent names")
+    
+    # Create directory
     os.makedirs(save_dir, exist_ok=True)
-    logger.info(f"Comparing {len(model_paths)} agents")
     
-    results = {}
-    model_names = []
+    # Results for each agent
+    all_results = {}
+    all_rewards = {}
     
-    # Evaluate each model
-    for i, model_path in enumerate(model_paths):
-        model_name = os.path.basename(model_path).replace(".pth", "")
-        model_names.append(model_name)
-        logger.info(f"Evaluating model {i+1}/{len(model_paths)}: {model_name}")
+    # Evaluate each agent
+    for agent, name in zip(agents, agent_names):
+        logger.info(f"Evaluating {name}...")
         
-        # Load agent
-        agent = load_agent(model_path)
+        # Evaluate the agent
+        results = evaluate_agent(
+            agent=agent,
+            env=env,
+            num_episodes=num_episodes,
+            max_steps=max_steps,
+            render=False,
+            verbose=False
+        )
         
-        # Create environment
-        render_mode = "human" if render else None
-        env = LunarLanderEnvironment(render_mode=render_mode)
+        # Store results
+        all_results[name] = results
+        all_rewards[name] = results["mean_reward"]
         
-        # Evaluate agent
-        stats = evaluate_agent(env, agent, num_episodes, render)
-        results[model_name] = stats
-        
-        # Close environment
-        env.close()
+        logger.info(f"{name} - Mean Reward: {results['mean_reward']:.2f} ± {results['std_reward']:.2f}")
     
-    # Create comparison bar chart
-    plt.figure(figsize=(12, 6))
-    x = np.arange(len(model_names))
-    width = 0.35
+    # Create comparison plot
+    plt.figure(figsize=(12, 8))
     
-    rewards = [results[name]["avg_reward"] for name in model_names]
-    std_devs = [results[name]["std_reward"] for name in model_names]
+    # Bar plot for mean rewards
+    means = [all_results[name]["mean_reward"] for name in agent_names]
+    stds = [all_results[name]["std_reward"] for name in agent_names]
     
-    plt.bar(x, rewards, width, yerr=std_devs, align='center', alpha=0.7, ecolor='black', capsize=10)
-    plt.ylabel('Average Reward')
+    plt.bar(agent_names, means, yerr=stds, alpha=0.7, capsize=10)
+    plt.axhline(y=200, color='r', linestyle='--', label='Target Score (200)')
+    plt.ylabel('Mean Reward')
     plt.title('Agent Performance Comparison')
-    plt.xticks(x, model_names, rotation=45)
+    plt.legend()
     plt.grid(True, alpha=0.3)
-    plt.tight_layout()
     
+    # Save comparison plot
     plt.savefig(os.path.join(save_dir, "agent_comparison.png"))
+    plt.close()
     
-    # Save comparison results
-    with open(os.path.join(save_dir, "comparison_results.json"), 'w') as f:
-        # Convert numpy values to Python natives for JSON serialization
-        serializable_results = {}
-        for model, stats in results.items():
-            serializable_stats = {}
-            for key, value in stats.items():
-                if isinstance(value, np.ndarray):
-                    serializable_stats[key] = value.tolist()
-                elif isinstance(value, (np.float32, np.float64)):
-                    serializable_stats[key] = float(value)
-                elif isinstance(value, (np.int32, np.int64)):
-                    serializable_stats[key] = int(value)
-                else:
-                    serializable_stats[key] = value
-            serializable_results[model] = serializable_stats
-        
-        json.dump(serializable_results, f, indent=4)
+    # Save results to JSON
+    with open(os.path.join(save_dir, "comparison_results.json"), "w") as f:
+        json.dump(all_results, f, indent=2)
     
-    logger.info(f"Comparison completed. Results saved to {save_dir}")
-    return results
+    logger.info(f"Comparison completed and saved to {save_dir}")
+    
+    return all_results
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate trained RL agents on Lunar Lander")
-    
-    parser.add_argument("--model", type=str, required=True,
-                      help="Path to model file or directory containing model files")
-    parser.add_argument("--episodes", type=int, default=10,
-                      help="Number of evaluation episodes")
+    """
+    Main function for evaluating agents.
+    """
+    parser = argparse.ArgumentParser(description="Evaluate RL agents on Lunar Lander")
+    parser.add_argument("--model_path", type=str, required=True,
+                        help="Path to the model checkpoint")
+    parser.add_argument("--agent", type=str, default="dqn", choices=["dqn", "double_dqn"],
+                        help="Type of agent to evaluate")
+    parser.add_argument("--continuous", action="store_true",
+                        help="Use continuous action space (LunarLanderContinuous-v2)")
+    parser.add_argument("--episodes", type=int, default=100,
+                        help="Number of evaluation episodes")
+    parser.add_argument("--max_steps", type=int, default=1000,
+                        help="Maximum steps per episode")
     parser.add_argument("--render", action="store_true",
-                      help="Render environment during evaluation")
+                        help="Render the environment during evaluation")
     parser.add_argument("--record", action="store_true",
-                      help="Record episodes as GIFs")
-    parser.add_argument("--analyze", action="store_true",
-                      help="Perform detailed state and action analysis")
-    parser.add_argument("--compare", action="store_true",
-                      help="Compare multiple models (--model should be a directory)")
+                        help="Record evaluation episodes")
+    parser.add_argument("--video_path", type=str, default="results/videos",
+                        help="Directory to save videos")
     parser.add_argument("--seed", type=int, default=42,
-                      help="Random seed for reproducibility")
+                        help="Random seed")
+    parser.add_argument("--device", type=str, default="auto",
+                        help="Device to use (auto, cpu, cuda)")
+    parser.add_argument("--compare", action="store_true",
+                        help="Compare this agent with others in the specified directory")
+    parser.add_argument("--compare_dir", type=str, default="models",
+                        help="Directory containing models to compare")
     
     args = parser.parse_args()
     
-    # Set seeds for reproducibility
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    # Set device
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
     
-    # Create directories
-    os.makedirs("logs", exist_ok=True)
-    os.makedirs("results/evaluation", exist_ok=True)
+    logger.info(f"Using device: {device}")
     
-    # Handle comparison mode
-    if args.compare:
-        if not os.path.isdir(args.model):
-            logger.error("For comparison mode, --model should be a directory")
-            return
-        
-        # Find all model files in the directory
-        model_files = [os.path.join(args.model, f) for f in os.listdir(args.model) 
-                      if f.endswith(".pth")]
-        
-        if not model_files:
-            logger.error(f"No model files found in {args.model}")
-            return
-        
-        compare_agents(model_files, args.episodes, args.render)
-        return
-    
-    # Single model evaluation
-    if not os.path.exists(args.model):
-        logger.error(f"Model file not found: {args.model}")
-        return
+    # Set random seed
+    set_seed(args.seed)
     
     # Create environment
-    render_mode = "human" if args.render else ("rgb_array" if args.record else None)
-    env = LunarLanderEnvironment(render_mode=render_mode, seed=args.seed)
-    
-    # Load agent
-    agent = load_agent(args.model)
-    
-    # Evaluate agent
-    record_dir = "results/evaluation"
-    eval_stats = evaluate_agent(
-        env=env,
-        agent=agent,
-        num_episodes=args.episodes,
-        render=args.render,
-        record=args.record,
-        record_dir=record_dir
+    render_mode = "human" if args.render else None
+    env = LunarLanderEnvironment(
+        continuous=args.continuous,
+        render_mode=render_mode,
+        seed=args.seed
     )
     
-    # Save evaluation results
-    results_file = os.path.join(record_dir, "evaluation_results.json")
-    save_training_data(eval_stats, results_file)
+    # Load agent
+    agent = load_agent(args.model_path, args.agent, env, device)
     
-    # Perform state analysis if requested
-    if args.analyze:
-        analyze_states(env, agent, num_episodes=min(5, args.episodes))
+    if args.compare:
+        # Collect all models to compare
+        agents = [agent]
+        agent_names = [f"{args.agent}_current"]
+        
+        # Look for other models in compare_dir
+        if os.path.exists(args.compare_dir):
+            for model_file in os.listdir(args.compare_dir):
+                if model_file.endswith(".pt") and os.path.join(args.compare_dir, model_file) != args.model_path:
+                    try:
+                        # Try to determine agent type from filename
+                        if "double_dqn" in model_file.lower():
+                            agent_type = "double_dqn"
+                        elif "dqn" in model_file.lower():
+                            agent_type = "dqn"
+                        else:
+                            # Skip if can't determine
+                            continue
+                        
+                        # Load the agent
+                        compare_agent = load_agent(
+                            os.path.join(args.compare_dir, model_file),
+                            agent_type, 
+                            env,
+                            device
+                        )
+                        
+                        agents.append(compare_agent)
+                        agent_names.append(f"{agent_type}_{model_file.replace('.pt', '')}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load model {model_file}: {e}")
+        
+        if len(agents) > 1:
+            # Compare agents
+            comparison_results = compare_agents(
+                agents=agents,
+                agent_names=agent_names,
+                env=env,
+                num_episodes=args.episodes,
+                max_steps=args.max_steps,
+                save_dir="results/comparisons"
+            )
+        else:
+            logger.warning("No other models found for comparison. Evaluating single agent.")
+            # Fall back to single agent evaluation
+            args.compare = False
     
-    # Clean up
+    if not args.compare:
+        # Standard evaluation
+        results = evaluate_agent(
+            agent=agent,
+            env=env,
+            num_episodes=args.episodes,
+            max_steps=args.max_steps,
+            render=args.render,
+            record_video=args.record,
+            video_path=args.video_path
+        )
+        
+        # Save results
+        os.makedirs("results", exist_ok=True)
+        
+        # Save as JSON
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        results_file = f"results/evaluation_{args.agent}_{timestamp}.json"
+        with open(results_file, "w") as f:
+            json.dump(results, f, indent=2)
+        
+        logger.info(f"Evaluation results saved to {results_file}")
+    
+    # Close environment
     env.close()
 
 if __name__ == "__main__":
-    main() 
+    main()
