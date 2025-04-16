@@ -1,37 +1,36 @@
-🧠 AI Self-Evolving Guidelines
+🧠 AI SELF-EVOLVING GUIDELINES
 
-- Keep all instructions here unless intentionally updating.
-- Document only what truly helps future efficiency and prevents repeated mistakes
-
-
-
-
-📋 Instructions
-
-- During tasks, note key insights or corrections under LESSONS LEARNED.
-- Treat this file as a living reference for recurring patterns, repeated errors, and quick guidelines.
+- This .cursorrules doc is the AI's primary internal reference for continuous improvement
+- Keep instructions concise, focusing on recurring mistakes and high-impact insights
+- Update deliberately to enhance efficiency, creativity, and problem-solving
 
 
 
 
-📌 Task Planning and Validation
+📋 DOCUMENTATION & PLANNING
 
-When starting a new task
-- Explain the goal and core requirements
-- Subdivide into manageable subtasks and track progress (mark completed with [X])
-- Note barriers encountered and successful strategies
-
-After each milestone
-- Reflect on lessons for future reuse
-- Validate work with tests, checking success/failure paths
-- Confirm results before marking tasks complete
+- Record only patterns or issues that are likely to recur
+- Break tasks into subtasks with clear goals; track progress with [X] or similar markers
+- Preserve user environment details or preferences for seamless collaboration
 
 
 
 
-🛠️ Tools
+📌 TASK & SUBTASK PLANNING
 
-Note all tools/scripts used clearly, including purpose, location, commands, and concise examples:
+- Before starting a new task, break it down into smaller subtasks
+- Mark progress or completion of each subtask (use something like [X] for completed)
+- If new insights or shortcuts emerge, update relevant sections here
+- After each milestone, validate work, reflect on lessons learned, and log them if they’re likely to recur
+
+
+
+
+🛠️ TOOLS & INTEGRATIONS
+
+- Document scripts, libraries, or external services that boost AI capabilities
+- Note purpose, usage patterns, and location of each tool
+- Refer to README.md or module-level docs for detailed instructions or examples
 
 Search Engine Tool:
 • Location: utils/search_engine.py
@@ -73,9 +72,11 @@ NOTE: For complete documentation of each tool, refer to the README.md file in th
 
 
 
-🚨 Lessons Learned
+🚨 LESSONS LEARNED
 
-IMPORTANT: Focus on recurring issues and patterns that could affect future work. Do not document one-off issues or project-specific details. Prioritize documentation of systemic challenges that could repeat.
+- Log persistent errors or repeated pitfalls along with solutions or workarounds
+- Include best practices and shortcuts that substantially improve outcomes
+- Avoid clutter by omitting one-off or low-impact issues
 
 💡 Python Environment Issues:
 - When running Python scripts on Windows, use `py` instead of `python`
@@ -104,9 +105,6 @@ IMPORTANT: Focus on recurring issues and patterns that could affect future work.
 - Mock external APIs/services for tests to avoid network dependencies
 - Use try/except blocks to handle network failures gracefully
 
-👤 User-Specific Preferences:
-- Windows 11 environment with PowerShell as the terminal
-- Prefers flat folder structure for utilities in the utils/ folder
 
 💡 Documentation Best Practices:
 - Maintain README.md in each module folder for detailed documentation
@@ -117,41 +115,36 @@ IMPORTANT: Focus on recurring issues and patterns that could affect future work.
 
 
 
-📝 Scratchpad
+👤 USER-SPECIFIC NOTES
 
-Use actively for immediate thoughts, quick experiments, hypotheses, and exploration. Regularly transfer valuable insights into "Lessons Learned" or "Tools Documentation." Clear regularly.
-
-
-
-
-🔄 Continuous Improvement
-
-- Regularly update outdated references or instructions.
-- Identify repeated manual steps for automation.
-- Challenge assumptions that may slow progress.
-- Mark items for weekly or monthly review.
+- Observe recurring user preferences, environment details, and workflows
+- Adapt your approaches to align with the user’s style and system constraints
 
 
 
 
-📚 Documentation Guidelines
+✔️ SUCCESS CRITERIA
 
-- Focus on concise, actionable information over comprehensive documentation
-- Document the "why" behind decisions, not just the "what" and "how"
-- Use bullet points and short examples rather than long paragraphs
-- Prioritize documenting edge cases, gotchas, and non-obvious behaviors
-- Archive older or less relevant documentation when updating
-- For .cursorrules:
-  * Document only recurring issues and general patterns, not one-off problems
-  * Focus on insights that prevent future errors
-  * Limit examples to 3-5 lines of code when possible
-  * Regularly review and prune outdated information
-  * Group similar issues together under clear headings
-- For README.md:
-  * Focus on clear usage examples
-  * Include minimum required parameters
-  * Document return values and exceptions
-  * Keep API documentation up-to-date with code changes
+- Demonstrable gains in accuracy, speed, and creative solutions over time
+- Fewer repeats of documented mistakes
+- Clear, brief updates that reduce friction and confusion
+- Positive user feedback reflecting better efficiency and problem-solving
+
+
+
+
+📝 SCRATCHPAD
+
+- Use as a temporary space for brainstorming, quick tests, or experimental approaches
+- Migrate any reusable insights to "Lessons Learned" or "Tools & Integrations"
+
+
+
+
+🔄 CONTINUOUS IMPROVEMENT
+- Revisit assumptions, instructions, and processes periodically
+- Remove or consolidate obsolete information to maintain clarity
+- Embrace innovative approaches and challenge limiting practices
 
 
 
