@@ -1,4 +1,3 @@
-```md
 # AI-Agent-Projects
 
 This repository is a hands-on exploration of building end-to-end projects with the assistance of an AI agent. It includes a refactored machine learning pipeline and a reinforcement learning project, each demonstrating practical approaches to problem-solving with modern AI techniques.
@@ -69,4 +68,3 @@ Pull requests are welcome. If you have ideas to improve the pipeline or expand R
 All code in this repository is released under the [LICENSE](LICENSE) provided. Feel free to modify and use it within the terms of the license.
 
 Enjoy exploring the projects, and have fun experimenting with AI agents in your own workflows!
-```
