@@ -30,7 +30,7 @@ Clone the Repository
 
 bash
 Copy
-git clone https://github.com/your-username/AI-Agent-Projects.git
+git clone https://github.com/xzhou110/AI-Agent-Projects.git
 cd AI-Agent-Projects
 Install Dependencies
 
