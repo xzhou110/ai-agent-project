@@ -19,6 +19,7 @@ ENV/
 
 # Project specific
 data/             # Potentially large data files
+docs/
 
 # OS specific
 .DS_Store         # Mac OS system file (if collaborating)
