@@ -167,6 +167,51 @@ def _assistant_message_to_dict(message: Any) -> dict[str, Any]:
     return d
 
 
+def _print_full_agent_history(
+    messages: list[dict[str, Any]],
+    final_assistant_content: str | None,
+) -> None:
+    """
+    Dump the full trail sent to/returned from the model before returning to the client:
+    user message, each assistant tool_calls block, each tool result, then the final reply.
+    """
+    sep = "=" * 72
+    print(f"\n{sep}", flush=True)
+    print("[CHAT] Full message history leading to final response", flush=True)
+    print(sep, flush=True)
+
+    for i, m in enumerate(messages):
+        role = m.get("role")
+        if role == "user":
+            print(f"\n--- [{i}] INITIAL USER MESSAGE ---", flush=True)
+            print(m.get("content") or "", flush=True)
+        elif role == "assistant":
+            print(f"\n--- [{i}] ASSISTANT (tool_calls decision) ---", flush=True)
+            c = m.get("content")
+            if c:
+                print("assistant_content (same turn, if any):", flush=True)
+                print(c, flush=True)
+            tcs = m.get("tool_calls")
+            if tcs:
+                print("tool_calls (what the model decided to run):", flush=True)
+                print(
+                    json.dumps(tcs, indent=2, ensure_ascii=False),
+                    flush=True,
+                )
+        elif role == "tool":
+            tid = m.get("tool_call_id", "")
+            print(
+                f"\n--- [{i}] TOOL RESULT (raw payload to model) "
+                f"tool_call_id={tid!r} ---",
+                flush=True,
+            )
+            print(m.get("content") or "", flush=True)
+
+    print("\n--- FINAL ASSISTANT MESSAGE (returned to user) ---", flush=True)
+    print(final_assistant_content or "", flush=True)
+    print(f"{sep}\n", flush=True)
+
+
 def _tool_log_label(tool_name: str) -> str:
     """Human-friendly tool name for logs (matches user-facing 'search' wording)."""
     if tool_name == "web_search":
@@ -301,8 +346,8 @@ async def chat(body: ChatRequest):
             detail="SUPER_MIND_API_KEY is missing; set it in .env",
         )
 
-    # Up to max_turns model calls with tools, then one optional 7th text-only synthesis call.
-    max_turns = 6
+    # Up to max_turns model calls with tools (3), then optional 4th text-only synthesis call.
+    max_turns = 3
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": body.user_message},
     ]
@@ -328,6 +373,7 @@ async def chat(body: ChatRequest):
                     status_code=502,
                     detail="Assistant returned no text content",
                 )
+            _print_full_agent_history(messages, message.content)
             return {"content": message.content}
 
         messages.append(_assistant_message_to_dict(message))
@@ -354,7 +400,7 @@ async def chat(body: ChatRequest):
 
         if turn == max_turns:
             logger.warning(
-                "[Agent] Max tool turns (%s) reached; 7th call: final text-only reply",
+                "[Agent] Max tool turns (%s) reached; 4th call: final text-only synthesis",
                 max_turns,
             )
             try:
@@ -376,6 +422,7 @@ async def chat(body: ChatRequest):
                         "no text. Try narrowing the question."
                     ),
                 )
+            _print_full_agent_history(messages, final_msg.content)
             return {"content": final_msg.content}
 
 
