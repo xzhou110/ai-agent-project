@@ -2,12 +2,16 @@ import asyncio
 import json
 import logging
 import os
+import sys
+from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
@@ -23,6 +27,8 @@ if not logger.handlers:
     logger.propagate = False
 
 app = FastAPI()
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 _base_url = "https://space.ai-builders.com/backend/v1"
 _search_url = f"{_base_url.rstrip('/')}/search/"
@@ -167,6 +173,18 @@ def _assistant_message_to_dict(message: Any) -> dict[str, Any]:
     return d
 
 
+def _safe_stdout_print(text: str, *, end: str = "\n") -> None:
+    """Avoid UnicodeEncodeError on Windows consoles when dumping large Unicode tool payloads."""
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+    payload = text + end
+    data = payload.encode(enc, errors="replace")
+    try:
+        sys.stdout.buffer.write(data)
+    except AttributeError:
+        sys.stdout.write(payload.encode("ascii", errors="replace").decode("ascii"))
+    sys.stdout.flush()
+
+
 def _print_full_agent_history(
     messages: list[dict[str, Any]],
     final_assistant_content: str | None,
@@ -176,40 +194,36 @@ def _print_full_agent_history(
     user message, each assistant tool_calls block, each tool result, then the final reply.
     """
     sep = "=" * 72
-    print(f"\n{sep}", flush=True)
-    print("[CHAT] Full message history leading to final response", flush=True)
-    print(sep, flush=True)
+    _safe_stdout_print(f"\n{sep}")
+    _safe_stdout_print("[CHAT] Full message history leading to final response")
+    _safe_stdout_print(sep)
 
     for i, m in enumerate(messages):
         role = m.get("role")
         if role == "user":
-            print(f"\n--- [{i}] INITIAL USER MESSAGE ---", flush=True)
-            print(m.get("content") or "", flush=True)
+            _safe_stdout_print(f"\n--- [{i}] INITIAL USER MESSAGE ---")
+            _safe_stdout_print(m.get("content") or "")
         elif role == "assistant":
-            print(f"\n--- [{i}] ASSISTANT (tool_calls decision) ---", flush=True)
+            _safe_stdout_print(f"\n--- [{i}] ASSISTANT (tool_calls decision) ---")
             c = m.get("content")
             if c:
-                print("assistant_content (same turn, if any):", flush=True)
-                print(c, flush=True)
+                _safe_stdout_print("assistant_content (same turn, if any):")
+                _safe_stdout_print(c)
             tcs = m.get("tool_calls")
             if tcs:
-                print("tool_calls (what the model decided to run):", flush=True)
-                print(
-                    json.dumps(tcs, indent=2, ensure_ascii=False),
-                    flush=True,
-                )
+                _safe_stdout_print("tool_calls (what the model decided to run):")
+                _safe_stdout_print(json.dumps(tcs, indent=2, ensure_ascii=False))
         elif role == "tool":
             tid = m.get("tool_call_id", "")
-            print(
+            _safe_stdout_print(
                 f"\n--- [{i}] TOOL RESULT (raw payload to model) "
-                f"tool_call_id={tid!r} ---",
-                flush=True,
+                f"tool_call_id={tid!r} ---"
             )
-            print(m.get("content") or "", flush=True)
+            _safe_stdout_print(m.get("content") or "")
 
-    print("\n--- FINAL ASSISTANT MESSAGE (returned to user) ---", flush=True)
-    print(final_assistant_content or "", flush=True)
-    print(f"{sep}\n", flush=True)
+    _safe_stdout_print("\n--- FINAL ASSISTANT MESSAGE (returned to user) ---")
+    _safe_stdout_print(final_assistant_content or "")
+    _safe_stdout_print(f"{sep}\n")
 
 
 def _tool_log_label(tool_name: str) -> str:
@@ -260,6 +274,156 @@ async def _execute_tool_call(name: str, arguments_json: str) -> str:
 
 class ChatRequest(BaseModel):
     user_message: str
+
+
+@app.get("/chat-ui")
+async def chat_ui():
+    """Customer-facing chat page (register before any /{param} catch-alls)."""
+    path = _STATIC_DIR / "chat.html"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="chat.html missing under static/")
+    return FileResponse(path, media_type="text/html")
+
+
+EmitFn = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+async def run_agent_chat(
+    user_message: str,
+    *,
+    emit: EmitFn | None = None,
+) -> str:
+    """
+    Shared agent loop for /chat and /chat/stream.
+    If emit is set, JSON-serializable event dicts are sent for the customer UI.
+    """
+    if _client is None:
+        raise HTTPException(
+            status_code=500,
+            detail="SUPER_MIND_API_KEY is missing; set it in .env",
+        )
+
+    async def _emit(ev: dict[str, Any]) -> None:
+        if emit:
+            await emit(ev)
+
+    max_turns = 3
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": user_message},
+    ]
+
+    await _emit({"type": "status", "message": "Received your message. Starting the agent…"})
+
+    for turn in range(1, max_turns + 1):
+        await _emit(
+            {
+                "type": "status",
+                "message": f"Calling the model (step {turn} of {max_turns}, tools allowed)…",
+            }
+        )
+        try:
+            completion = await _client.chat.completions.create(
+                model="gpt-5",
+                messages=messages,
+                tools=AGENT_TOOLS,
+                tool_choice="auto",
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+
+        message = completion.choices[0].message
+
+        if not message.tool_calls:
+            final = (message.content or "").strip()
+            logger.info("[Agent] Final Answer: %r", final)
+            if not final:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Assistant returned no text content",
+                )
+            await _emit({"type": "status", "message": "Got final answer from the model."})
+            _print_full_agent_history(messages, message.content)
+            return message.content
+
+        messages.append(_assistant_message_to_dict(message))
+        await _emit(
+            {
+                "type": "status",
+                "message": f"The model requested {len(message.tool_calls)} tool call(s). Running…",
+            }
+        )
+
+        for tc in message.tool_calls:
+            label = _tool_log_label(tc.function.name)
+            logger.info("[Agent] Decided to call tool: %r", label)
+            args_raw = tc.function.arguments or ""
+            ap = args_raw if len(args_raw) <= 600 else args_raw[:600] + "…"
+            await _emit(
+                {
+                    "type": "tool_call",
+                    "name": tc.function.name,
+                    "label": label,
+                    "arguments_preview": ap,
+                }
+            )
+
+            output = await _execute_tool_call(
+                tc.function.name,
+                tc.function.arguments or "",
+            )
+            logger.info(
+                "[System] Tool Output: %r",
+                _format_tool_output_for_log(output),
+            )
+            await _emit(
+                {
+                    "type": "tool_result",
+                    "label": label,
+                    "preview": _format_tool_output_for_log(output),
+                }
+            )
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": output,
+                }
+            )
+
+        if turn == max_turns:
+            logger.warning(
+                "[Agent] Max tool turns (%s) reached; 4th call: final text-only synthesis",
+                max_turns,
+            )
+            await _emit(
+                {
+                    "type": "synthesis",
+                    "message": "Tool budget used. Running final synthesis (no more tools)…",
+                }
+            )
+            try:
+                final_completion = await _client.chat.completions.create(
+                    model="gpt-5",
+                    messages=messages,
+                )
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=str(e)) from e
+
+            final_msg = final_completion.choices[0].message
+            final_text = (final_msg.content or "").strip()
+            logger.info("[Agent] Final Answer: %r", final_text)
+            if not final_text:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "Agent used max tool turns but the synthesis call returned "
+                        "no text. Try narrowing the question."
+                    ),
+                )
+            _print_full_agent_history(messages, final_msg.content)
+            return final_msg.content
+
+    raise HTTPException(status_code=502, detail="Unexpected agent loop exit")
 
 
 @app.get("/tools/web-search/schema")
@@ -340,92 +504,58 @@ async def verify_web_search_tool_call():
 
 @app.post("/chat")
 async def chat(body: ChatRequest):
-    if _client is None:
-        raise HTTPException(
-            status_code=500,
-            detail="SUPER_MIND_API_KEY is missing; set it in .env",
-        )
+    content = await run_agent_chat(body.user_message)
+    return {"content": content}
 
-    # Up to max_turns model calls with tools (3), then optional 4th text-only synthesis call.
-    max_turns = 3
-    messages: list[dict[str, Any]] = [
-        {"role": "user", "content": body.user_message},
-    ]
 
-    for turn in range(1, max_turns + 1):
-        try:
-            completion = await _client.chat.completions.create(
-                model="gpt-5",
-                messages=messages,
-                tools=AGENT_TOOLS,
-                tool_choice="auto",
-            )
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e)) from e
+@app.post("/chat/stream")
+async def chat_stream(body: ChatRequest):
+    """NDJSON stream of status / tool / done / error events for the customer UI."""
 
-        message = completion.choices[0].message
+    async def ndjson_generator() -> Any:
+        queue: asyncio.Queue[Any] = asyncio.Queue()
 
-        if not message.tool_calls:
-            final = (message.content or "").strip()
-            logger.info("[Agent] Final Answer: %r", final)
-            if not final:
-                raise HTTPException(
-                    status_code=502,
-                    detail="Assistant returned no text content",
-                )
-            _print_full_agent_history(messages, message.content)
-            return {"content": message.content}
+        async def emit(ev: dict[str, Any]) -> None:
+            await queue.put(ev)
 
-        messages.append(_assistant_message_to_dict(message))
-
-        for tc in message.tool_calls:
-            label = _tool_log_label(tc.function.name)
-            logger.info("[Agent] Decided to call tool: %r", label)
-
-            output = await _execute_tool_call(
-                tc.function.name,
-                tc.function.arguments or "",
-            )
-            logger.info(
-                "[System] Tool Output: %r",
-                _format_tool_output_for_log(output),
-            )
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": output,
-                }
-            )
-
-        if turn == max_turns:
-            logger.warning(
-                "[Agent] Max tool turns (%s) reached; 4th call: final text-only synthesis",
-                max_turns,
-            )
+        async def worker() -> None:
             try:
-                final_completion = await _client.chat.completions.create(
-                    model="gpt-5",
-                    messages=messages,
+                content = await run_agent_chat(body.user_message, emit=emit)
+                await queue.put({"type": "done", "content": content})
+            except HTTPException as he:
+                d = he.detail
+                await queue.put(
+                    {
+                        "type": "error",
+                        "detail": d if isinstance(d, str) else str(d),
+                    }
                 )
             except Exception as e:
-                raise HTTPException(status_code=502, detail=str(e)) from e
+                await queue.put({"type": "error", "detail": str(e)})
+            finally:
+                await queue.put(None)
 
-            final_msg = final_completion.choices[0].message
-            final_text = (final_msg.content or "").strip()
-            logger.info("[Agent] Final Answer: %r", final_text)
-            if not final_text:
-                raise HTTPException(
-                    status_code=502,
-                    detail=(
-                        "Agent used max tool turns but the synthesis call returned "
-                        "no text. Try narrowing the question."
-                    ),
-                )
-            _print_full_agent_history(messages, final_msg.content)
-            return {"content": final_msg.content}
+        task = asyncio.create_task(worker())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield json.dumps(item, ensure_ascii=False) + "\n"
+        finally:
+            await task
+
+    return StreamingResponse(
+        ndjson_generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
-@app.get("/{user_input}")
+@app.get("/hello/{user_input}")
 async def hello(user_input: str):
+    """Demo JSON route; not a catch-all (avoids shadowing /chat-ui and similar paths)."""
     return {"message": f"Hello, World {user_input}"}
