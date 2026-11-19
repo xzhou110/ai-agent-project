@@ -4,6 +4,10 @@ This project implements and compares different reinforcement learning algorithms
 
 ![Lunar Lander Environment](https://gymnasium.farama.org/_images/lunar_lander.gif)
 
+## Project Status
+
+This is an early learning project and is not actively maintained. Training with `python main.py train` works and has been run on the real Lunar Lander environment for both agents. The rest is unfinished and currently fails: the `evaluate` and `compare` modes, running `train.py` directly, `visualize.py`, and the `--continuous` option (these agents choose from a fixed list of actions, which the continuous environment does not accept).
+
 ## Project Overview
 
 The Lunar Lander task is a classic reinforcement learning problem where an agent must learn to safely land a lunar module on a landing pad. The environment provides a reward function that incentivizes:
