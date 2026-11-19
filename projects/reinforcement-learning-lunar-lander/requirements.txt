@@ -1,6 +1,6 @@
 numpy>=1.21.0
 torch>=1.12.0
-gymnasium>=0.28.1
+gymnasium>=1.0.0
 matplotlib>=3.5.0
 seaborn>=0.12.0
 tqdm>=4.65.0
@@ -10,7 +10,7 @@ pandas>=1.5.0
 imageio>=2.25.0
 imageio-ffmpeg>=0.4.8
 # For environment
-box2d-py>=2.3.8
+box2d>=2.3.10
 pygame>=2.1.0
 # For logging
 tensorboard>=2.12.0 

@@ -55,10 +55,10 @@ class LunarLanderEnvironment:
         self.render_mode = render_mode
         self.seed = seed
         
-        # Create the Gym environment
-        env_id = "LunarLander-v2"
+        # Create the Gym environment (gymnasium 1.0 replaced the v2 ids with v3)
+        env_id = "LunarLander-v3"
         if continuous:
-            env_id = "LunarLanderContinuous-v2"
+            env_id = "LunarLanderContinuous-v3"
         
         logger.info(f"Creating {env_id} environment with render_mode: {render_mode}")
         
@@ -67,9 +67,10 @@ class LunarLanderEnvironment:
             "render_mode": render_mode,
         }
         
-        if seed is not None:
-            env_kwargs["seed"] = seed
-        
+        # The seed is not an environment option: gym.make() would pass it to the
+        # LunarLander constructor, which rejects it. It is applied in reset().
+        self._seed_next_reset = seed is not None
+
         if gravity is not None or enable_wind or wind_power is not None or turbulence_power is not None:
             # Only add these kwargs if they are explicitly set
             if gravity is not None:
@@ -114,7 +115,13 @@ class LunarLanderEnvironment:
         self.current_step = 0
         self.total_reward = 0
         
-        observation, info = self.env.reset(seed=self.seed)
+        # Seed the first reset only. Passing the seed on every reset restarts the
+        # random generator each time, so every episode would be the same episode.
+        if self._seed_next_reset:
+            observation, info = self.env.reset(seed=self.seed)
+            self._seed_next_reset = False
+        else:
+            observation, info = self.env.reset()
         return observation
     
     def step(self, action):
@@ -199,14 +206,13 @@ class LunarLanderEnvironment:
         self.recording_env.close()
         
         # Recreate the original environment
-        env_id = "LunarLander-v2"
+        env_id = "LunarLander-v3"
         if self.continuous:
-            env_id = "LunarLanderContinuous-v2"
-        
+            env_id = "LunarLanderContinuous-v3"
+
         self.env = gym.make(
             env_id,
-            render_mode=self.render_mode,
-            seed=self.seed
+            render_mode=self.render_mode
         )
         
         self.recording_env = None
@@ -408,7 +414,7 @@ class LunarLanderEnvironment:
         truncated = False
         
         # Make Lunar Lander environment with rgb_array render mode for recording
-        temp_env = gym.make("LunarLander-v2", render_mode='rgb_array')
+        temp_env = gym.make("LunarLander-v3", render_mode='rgb_array')
         observation, _ = temp_env.reset()
         
         for _ in range(max_steps):

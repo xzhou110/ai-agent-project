@@ -309,7 +309,7 @@ def main():
     parser.add_argument("--agent", type=str, default="dqn", choices=["dqn", "double_dqn"],
                         help="Type of agent to evaluate")
     parser.add_argument("--continuous", action="store_true",
-                        help="Use continuous action space (LunarLanderContinuous-v2)")
+                        help="Use continuous action space (LunarLanderContinuous-v3)")
     parser.add_argument("--episodes", type=int, default=100,
                         help="Number of evaluation episodes")
     parser.add_argument("--max_steps", type=int, default=1000,

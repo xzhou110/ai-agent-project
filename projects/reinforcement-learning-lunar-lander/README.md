@@ -63,33 +63,37 @@ reinforcement-learning-lunar-lander/
 To train a DQN agent on the Lunar Lander environment:
 
 ```bash
-python main.py --mode train --agent dqn --episodes 1000
+python main.py train --agent dqn --episodes 1000
 ```
 
 For Double DQN:
 
 ```bash
-python main.py --mode train --agent double_dqn --episodes 1000
+python main.py train --agent double_dqn --episodes 1000
 ```
 
-You can also use continuous action space:
+Additional options, written after `train`:
+- `--lr`: Learning rate for the optimizer (default: 0.001)
+- `--gamma`: Discount factor (default: 0.99)
+- `--epsilon_start`: Initial exploration rate (default: 1.0)
+- `--epsilon_end`: Final exploration rate (default: 0.01)
+- `--epsilon_decay`: Decay rate for epsilon (default: 0.995)
+- `--hidden_dims`: Sizes of the hidden layers (default: 128 128)
+- `--memory_size`: Size of the replay buffer (default: 100000)
+- `--batch_size`: Batch size for training (default: 64)
+- `--target_update`: Learning steps between target network updates (default: 10)
+- `--max_steps`: Maximum steps per episode (default: 1000)
+- `--eval_interval`: Episodes between evaluations (default: 50)
+- `--render_train`: Render the environment during training
+- `--output_dir`: Folder for the models, plots and metrics (default: `results/<agent>_<timestamp>`)
+
+Two options apply to every mode and are written before `train`:
+- `--seed`: Random seed for reproducibility (default: 42)
+- `--device`: Device to use, `auto`, `cpu` or `cuda` (default: `auto`)
 
 ```bash
-python main.py --mode train --agent dqn --episodes 1000 --continuous
+python main.py --seed 7 --device cpu train --agent dqn --episodes 1000
 ```
-
-Additional options:
-- `--learning-rate`: Learning rate for the optimizer (default: 0.001)
-- `--gamma`: Discount factor (default: 0.99)
-- `--epsilon-start`: Initial exploration rate (default: 1.0)
-- `--epsilon-end`: Final exploration rate (default: 0.05)
-- `--epsilon-decay`: Decay rate for epsilon (default: 0.995)
-- `--buffer-size`: Size of the replay buffer (default: 100000)
-- `--batch-size`: Batch size for training (default: 64)
-- `--target-update`: Target network update frequency (default: 10)
-- `--device`: Device to use for training ('cpu' or 'cuda', default: 'cpu')
-- `--render`: Render the environment during training
-- `--seed`: Random seed for reproducibility
 
 ### Evaluation
 

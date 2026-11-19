@@ -47,7 +47,7 @@ def main():
     
     # General settings
     parser.add_argument("--continuous", action="store_true",
-                        help="Use continuous action space (LunarLanderContinuous-v2)")
+                        help="Use continuous action space (LunarLanderContinuous-v3)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
     parser.add_argument("--device", type=str, default="auto",
@@ -81,7 +81,7 @@ def main():
     train_parser.add_argument("--batch_size", type=int, default=64,
                        help="Batch size for training")
     train_parser.add_argument("--target_update", type=int, default=10,
-                       help="Target network update frequency (episodes)")
+                       help="Target network update frequency (learning steps)")
     train_parser.add_argument("--eval_interval", type=int, default=50,
                        help="Evaluation interval (episodes)")
     train_parser.add_argument("--eval_episodes", type=int, default=10,
@@ -161,15 +161,15 @@ def main():
             agent = DQNAgent(
                 state_dim=env.state_dim,
                 action_dim=env.action_dim,
-                hidden_dims=args.hidden_dims,
+                hidden_sizes=args.hidden_dims,
                 learning_rate=args.lr,
                 gamma=args.gamma,
                 epsilon_start=args.epsilon_start,
                 epsilon_end=args.epsilon_end,
                 epsilon_decay=args.epsilon_decay,
-                memory_size=args.memory_size,
+                buffer_size=args.memory_size,
                 batch_size=args.batch_size,
-                target_update_frequency=args.target_update,
+                target_update_freq=args.target_update,
                 device=device
             )
             logger.info(f"Created DQN Agent with hidden dims {args.hidden_dims}")
@@ -177,15 +177,15 @@ def main():
             agent = DoubleDQNAgent(
                 state_dim=env.state_dim,
                 action_dim=env.action_dim,
-                hidden_dims=args.hidden_dims,
+                hidden_sizes=args.hidden_dims,
                 learning_rate=args.lr,
                 gamma=args.gamma,
                 epsilon_start=args.epsilon_start,
                 epsilon_end=args.epsilon_end,
                 epsilon_decay=args.epsilon_decay,
-                memory_size=args.memory_size,
+                buffer_size=args.memory_size,
                 batch_size=args.batch_size,
-                target_update_frequency=args.target_update,
+                target_update_freq=args.target_update,
                 device=device
             )
             logger.info(f"Created Double DQN Agent with hidden dims {args.hidden_dims}")
@@ -195,6 +195,7 @@ def main():
         metrics = train_agent(
             agent_type=args.agent,
             env=env,
+            agent=agent,
             num_episodes=args.episodes,
             max_steps=args.max_steps,
             target_update_freq=args.target_update,

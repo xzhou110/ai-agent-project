@@ -116,7 +116,8 @@ def train_agent(
     log_interval=10,
     eval_interval=100,
     verbose=True,
-    save_rewards=True
+    save_rewards=True,
+    agent=None
 ):
     """
     Train a DQN or Double DQN agent on the Lunar Lander environment.
@@ -129,7 +130,8 @@ def train_agent(
         epsilon_end (float): Final epsilon value for exploration.
         epsilon_decay (float): Rate of epsilon decay per episode.
         max_steps (int): Maximum steps per episode.
-        target_update_freq (int): Frequency of target network updates.
+        target_update_freq (int): Learning steps between target network updates
+            (used when this function creates the agent).
         update_start (int): Number of steps before starting updates.
         batch_size (int): Batch size for training.
         gamma (float): Discount factor.
@@ -141,7 +143,10 @@ def train_agent(
         eval_interval (int): Episode interval for evaluation.
         verbose (bool): Whether to print training progress.
         save_rewards (bool): Whether to save rewards to a file.
-        
+        agent: An agent the caller already built. When given it is trained as is,
+            and the agent settings above (learning rate, gamma, epsilon, batch size,
+            target update) are the caller's; when None an agent is created from them.
+
     Returns:
         dict: Dictionary containing training results.
     """
@@ -156,8 +161,10 @@ def train_agent(
     
     logger.info(f"Initializing {agent_type} agent with state_dim={state_dim}, action_dim={action_dim}")
     
-    # Create the agent
-    if agent_type.lower() == "dqn":
+    # Use the caller's agent, or create one
+    if agent is not None:
+        logger.info(f"Training the {agent_type} agent built by the caller")
+    elif agent_type.lower() == "dqn":
         agent = DQNAgent(
             state_dim=state_dim,
             action_dim=action_dim,
@@ -168,6 +175,7 @@ def train_agent(
             epsilon_decay=epsilon_decay,
             buffer_size=100000,
             batch_size=batch_size,
+            target_update_freq=target_update_freq,
             device=device
         )
     elif agent_type.lower() == "double_dqn":
@@ -181,6 +189,7 @@ def train_agent(
             epsilon_decay=epsilon_decay,
             buffer_size=100000,
             batch_size=batch_size,
+            target_update_freq=target_update_freq,
             device=device
         )
     else:
@@ -193,7 +202,8 @@ def train_agent(
     episode_lengths = []
     avg_rewards = []
     eval_rewards = []
-    
+    eval_episodes = []  # Episode number of each entry in eval_rewards
+
     # Progress bar
     pbar = tqdm(range(1, num_episodes + 1), desc="Training", disable=not verbose)
     
@@ -215,16 +225,13 @@ def train_agent(
             next_state, reward, done, truncated, _ = env.step(action)
             
             # Store transition
-            agent.store_transition(state, action, reward, next_state, done)
-            
-            # Learn from experience
-            if total_steps >= update_start and len(agent.memory) >= batch_size:
-                loss = agent.learn()
-            
-            # Update target network
-            if total_steps % target_update_freq == 0 and total_steps >= update_start:
-                agent.update_target_network()
-            
+            agent.store_experience(state, action, reward, next_state, done)
+
+            # Learn from experience. learn() also copies the online network into
+            # the target network every agent.target_update_freq learning steps.
+            if total_steps >= update_start and agent.can_learn():
+                agent.learn()
+
             # Render if needed
             if render:
                 env.render()
@@ -239,7 +246,7 @@ def train_agent(
                 break
         
         # Decay epsilon
-        agent.decay_epsilon()
+        agent.update_epsilon()
         
         # Track episode stats
         episode_rewards.append(episode_reward)
@@ -271,12 +278,13 @@ def train_agent(
         if episode % eval_interval == 0 or episode == num_episodes:
             eval_reward = evaluate_agent(agent, env, num_episodes=5, render=False)
             eval_rewards.append(eval_reward)
+            eval_episodes.append(episode)
             logger.info(f"Evaluation at episode {episode}: Average reward: {eval_reward:.2f}")
         
         # Save model periodically
         if episode % 100 == 0 or episode == num_episodes:
             model_path = save_path / f"{agent_type}_model_episode_{episode}.pt"
-            agent.save_model(model_path)
+            agent.save(model_path)
             logger.info(f"Model saved to {model_path}")
     
     # Training completed
@@ -285,7 +293,7 @@ def train_agent(
     
     # Save final model
     final_model_path = save_path / f"{agent_type}_final_model.pt"
-    agent.save_model(final_model_path)
+    agent.save(final_model_path)
     logger.info(f"Final model saved to {final_model_path}")
     
     # Save training results
@@ -315,14 +323,16 @@ def train_agent(
         eval_rewards,
         episode_lengths,
         agent_type,
-        save_path
+        save_path,
+        eval_episodes=eval_episodes
     )
-    
+
     # Return training results
     return {
         "episode_rewards": episode_rewards,
         "avg_rewards": avg_rewards,
         "eval_rewards": eval_rewards,
+        "eval_episodes": eval_episodes,
         "episode_lengths": episode_lengths,
         "final_model_path": str(final_model_path),
         "results_path": str(save_path)
@@ -343,10 +353,9 @@ def evaluate_agent(agent, env, num_episodes=10, render=False, seed=None):
         float: Average reward across episodes.
     """
     rewards = []
-    
-    # Set evaluation mode
-    agent.eval_mode()
-    
+
+    # select_action(evaluate=True) below is what switches exploration off;
+    # the agent has no separate evaluation mode to set.
     for episode in range(num_episodes):
         state = env.reset()
         episode_reward = 0
@@ -369,14 +378,11 @@ def evaluate_agent(agent, env, num_episodes=10, render=False, seed=None):
             episode_reward += reward
         
         rewards.append(episode_reward)
-    
-    # Set training mode
-    agent.train_mode()
-    
-    # Return average reward
-    return np.mean(rewards)
 
-def plot_training_results(episode_rewards, avg_rewards, eval_rewards, episode_lengths, agent_type, save_path):
+    # Return average reward
+    return float(np.mean(rewards))
+
+def plot_training_results(episode_rewards, avg_rewards, eval_rewards, episode_lengths, agent_type, save_path, eval_episodes=None):
     """
     Plot training results and save figures.
     
@@ -387,11 +393,13 @@ def plot_training_results(episode_rewards, avg_rewards, eval_rewards, episode_le
         episode_lengths (list): List of episode lengths.
         agent_type (str): Type of agent.
         save_path (Path): Directory to save figures.
+        eval_episodes (list): Episode number of each evaluation reward. When None,
+            evaluations are assumed to have run every 100 episodes.
     """
     # Create figure directory
     figures_path = save_path / "figures"
     figures_path.mkdir(exist_ok=True)
-    
+
     # Plot episode rewards
     plt.figure(figsize=(10, 6))
     plt.plot(episode_rewards)
@@ -404,10 +412,11 @@ def plot_training_results(episode_rewards, avg_rewards, eval_rewards, episode_le
     plt.savefig(figures_path / 'episode_rewards.png')
     plt.close()
     
-    # Plot evaluation rewards
-    eval_episodes = np.arange(100, len(episode_rewards) + 1, 100)
-    if len(eval_rewards) < len(eval_episodes):
-        eval_episodes = eval_episodes[:len(eval_rewards)]
+    # Plot evaluation rewards against the episodes they were measured at
+    if eval_episodes is None:
+        eval_episodes = np.arange(100, len(episode_rewards) + 1, 100)
+        if len(eval_rewards) < len(eval_episodes):
+            eval_episodes = eval_episodes[:len(eval_rewards)]
     
     plt.figure(figsize=(10, 6))
     plt.plot(eval_episodes, eval_rewards, 'g-', linewidth=2, marker='o')
@@ -567,7 +576,7 @@ def main():
     parser.add_argument("--agent", type=str, default="dqn", choices=["dqn", "double_dqn"],
                         help="Type of agent to train")
     parser.add_argument("--continuous", action="store_true",
-                        help="Use continuous action space (LunarLanderContinuous-v2)")
+                        help="Use continuous action space (LunarLanderContinuous-v3)")
     parser.add_argument("--episodes", type=int, default=1000,
                         help="Number of training episodes")
     parser.add_argument("--max_steps", type=int, default=1000,
